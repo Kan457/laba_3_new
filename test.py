@@ -1,202 +1,233 @@
-import sys  # Импорт системного модуля для работы с аргументами командной строки и выхода из приложения
-from PyQt6.QtWidgets import QApplication, QWidget, QTextEdit, QVBoxLayout, QLabel, QMessageBox  # Импорт нужных классов из PyQt6
-from PyQt6.QtGui import QTextCharFormat, QColor, QTextCursor, QFont  # Импорт классов для форматирования текста
-from PyQt6.QtCore import Qt, QTimer, QTime  # Импорт классов для таймера и времени
+# Импорт системного модуля для работы с аргументами и завершением программы
+import sys
 
+# Импорт нужных классов из PyQt6 для создания интерфейса
+from PyQt6.QtWidgets import QApplication, QWidget, QTextEdit, QLabel, QPushButton, QVBoxLayout , QHBoxLayout , QGridLayout , QMessageBox
+from PyQt6.QtGui import QTextCharFormat, QColor, QTextCursor, QFont , QPixmap  # Работа с цветом, текстом, шрифтами
+from PyQt6.QtCore import Qt, QTimer, QTime                             # Работа с временем и сигналами
+from button import keyboard_buttons  # Импортируем список кнопок (координаты и цвета клавиш)
 
-class TypingTrainer(QWidget):  # Класс тренажёра, наследуется от QWidget
+# Класс основного окна приложения
+class TypingTrainer(QWidget):
     def __init__(self):
-        super().__init__()  # Инициализация базового класса QWidget
-        self.original_text = ""  # Исходный текст для набора
-        self.error_count = 0  # Счётчик ошибок
+        super().__init__()  # Инициализация родительского класса QWidget
 
-        # ---------- Таймер и отсчёт времени ----------
-        self.timer = QTimer()  # Создаём объект таймера
-        self.time = QTime(0, 0, 0)  # Устанавливаем начальное время (00:00)
-        self.timer.timeout.connect(self.update_timer)  # Подключаем сигнал таймера к методу обновления
-        self.timer_running = False  # Флаг — идёт ли сейчас таймер
+        self.setWindowTitle("Тренажёр набора текста")  # Заголовок окна
+        self.setFixedSize(900, 650)                    # Фиксированный размер окна
 
-        # ---------- Рекорд времени ----------
-        self.best_time = None  # Переменная для хранения лучшего результата (тип QTime)
-        self.record_file = "record.txt"  # Имя файла для сохранения рекорда
-        self.load_record()  # Загружаем рекорд из файла (если есть)
+        # === Основные переменные ===
+        self.original_text = ""        # Текст для набора
+        self.error_count = 0           # Количество ошибок пользователя
+        self.timer_running = False     # Флаг, запущен ли таймер
+        self.time = QTime(0,0,0)       # Объект времени (начальное значение 00:00)
+        self.best_time = None          # Лучшее время (рекорд)
+        self.record_file = "record.txt" # Файл для сохранения рекорда
 
-        # ---------- Интерфейс ----------
-        self.init_ui()  # Создаём элементы интерфейса
-        self.load_text_from_file()  # Загружаем текст для тренировки
+        self.buttons = {}              # Словарь для хранения кнопок клавиатуры
 
+        # === Вызовы методов инициализации ===
+        self.init_ui()                 # Создание интерфейса
+        self.create_keyboard()         # Создание виртуальной клавиатуры
+        self.load_text_from_file()     # Загрузка текста из файла
+        self.load_record()             # Загрузка рекорда из файла
+
+        # === Настройка таймера ===
+        self.timer = QTimer()                        # Создаём таймер
+        self.timer.timeout.connect(self.update_timer) # При каждом срабатывании вызывается update_timer
+
+    # === Создание элементов интерфейса ===
     def init_ui(self):
-        layout = QVBoxLayout()  # Основной вертикальный layout для расположения элементов
+        self.layout = QVBoxLayout()      # Вертикальный макет (элементы располагаются сверху вниз)
+        base_font = QFont("Segoe Script", 14)   # Базовый шрифт для всех элементов
+        self.background_label = QLabel(self)
+        self.background_label.setPixmap(QPixmap("i.jpg"))  # путь к картинке
+        self.background_label.setScaledContents(True)
+        self.background_label.setGeometry(0, 0, 900, 650)
+        self.background_label.lower()  # Отправляем на задний план
 
-        base_font = QFont("Arial", 14)  # Базовый шрифт для всех текстовых элементов
+        # Поле для отображения оригинального текста
+        self.original_display = QTextEdit(self)
+        self.original_display.setReadOnly(True)
+        self.original_display.setFont(base_font)
+        self.original_display.setGeometry(10, 10, 880, 180)  # x, y, width, height
 
-        self.original_display = QTextEdit()  # Поле с оригинальным текстом
-        self.original_display.setReadOnly(True)  # Делаем поле только для чтения
-        self.original_display.setFixedHeight(100)  # Устанавливаем высоту
-        self.original_display.setFont(base_font)  # Устанавливаем шрифт
+        # Поле для ввода текста пользователем
+        self.user_input = QTextEdit(self)
+        self.user_input.setFont(base_font)
+        self.user_input.setGeometry(10, 210, 880, 50)  # x, y, width, height
+        self.user_input.textChanged.connect(self.update_display)
 
-        self.user_input = QTextEdit()  # Поле для пользовательского ввода
-        self.user_input.setFixedHeight(100)  # Устанавливаем высоту
-        self.user_input.setFont(base_font)  # Устанавливаем шрифт
-        self.user_input.textChanged.connect(self.update_display)  # Обновляем подсветку при изменении текста
+        # Метка ошибок
+        self.error_label = QLabel("Ошибок: 0", self)
+        self.error_label.setFont(base_font)
+        self.error_label.setGeometry(10, 260, 200, 30)  # x, y, width, height
 
-        self.error_label = QLabel("Ошибок: 0")  # Метка для отображения количества ошибок
-        self.error_label.setFont(base_font)  # Шрифт метки
+        # Метка таймера
+        self.timer_label = QLabel("Время: 00:00", self)
+        self.timer_label.setFont(base_font)
+        self.timer_label.setGeometry(350, 260, 200, 30)  # x, y, width, height
 
-        self.timer_label = QLabel("Время: 00:00")  # Метка таймера
-        self.timer_label.setFont(base_font)  # Шрифт метки
+    # === Создание экранной клавиатуры ===
+    def create_keyboard(self):
+        """Создание кнопок клавиатуры из списка keyboard_buttons"""
+        for name, x, y, x0, y0, color in keyboard_buttons:
+            button = QPushButton(name, self)
+            button.setGeometry(x, y, x0, y0)
+            button.setStyleSheet(f"background-color: {color};")
+            self.buttons[name.upper()] = button
+   
+        '''
+        keyboard_layout = QGridLayout()  # создаём сетку для клавиш
+        keyboard_layout.setSpacing(5)    # расстояние между клавишами
 
-        self.record_label = QLabel(self.get_record_text())  # Метка для вывода рекорда
-        self.record_label.setFont(base_font)  # Шрифт метки
+        row = 0
+        col = 0
+        max_cols = 14  # можно подстроить под ширину клавиатуры
 
-        # Добавляем все элементы на layout
-        layout.addWidget(QLabel("Оригинальный текст:", font=base_font))
-        layout.addWidget(self.original_display)
-        layout.addWidget(QLabel("Ваш ввод:", font=base_font))
-        layout.addWidget(self.user_input)
-        layout.addWidget(self.error_label)
-        layout.addWidget(self.timer_label)
-        layout.addWidget(self.record_label)
+        for key, x, y, w, h, color in keyboard_buttons:
+            btn = QPushButton(str(key))  # создаём кнопку
+            btn.setFixedSize(w, h)       # задаём размеры
+            btn.setStyleSheet(f"background-color: {color}; font-size: 14px;")
+            btn.clicked.connect(lambda checked, k=str(key): self.insert_key(k))
+            keyboard_layout.addWidget(btn, row, col)  # добавляем кнопку в сетку
+            self.buttons[str(key).upper()] = btn
 
-        self.setLayout(layout)  # Применяем layout к окну
-        self.setWindowTitle("Тренажёр набора текста (PyQt6)")  # Заголовок окна
+            col += 1
+            if col >= max_cols:  # перенос на новую строку
+                col = 0
+                row += 1
 
-    # ---------- Работа с рекордом ----------
-    def load_record(self):
-        """Загружает рекорд из файла record.txt."""
-        try:
-            with open(self.record_file, "r", encoding="utf-8") as f:  # Пытаемся открыть файл
-                record_str = f.read().strip()  # Считываем строку
-                if record_str:  # Если файл не пустой
-                    self.best_time = QTime.fromString(record_str, "mm:ss")  # Преобразуем строку в QTime
-        except FileNotFoundError:
-            self.best_time = None  # Если файл не найден — рекорда нет
+        self.layout.addLayout(keyboard_layout)  # добавляем клавиатуру в основной layout
+        '''
 
-    def save_record(self):
-        """Сохраняет рекорд в файл record.txt."""
-        if self.best_time:  # Проверяем, есть ли рекорд
-            with open(self.record_file, "w", encoding="utf-8") as f:  # Открываем файл для записи
-                f.write(self.best_time.toString("mm:ss"))  # Сохраняем рекорд как строку
+    # === Вставка символа в поле ввода ===
+    def insert_key(self, key):
+        cursor = self.user_input.textCursor()   # Получаем курсор в поле ввода
+        cursor.insertText(key)                  # Вставляем символ
+        self.user_input.setTextCursor(cursor)   # Обновляем положение курсора
 
-    def get_record_text(self):
-        """Возвращает строку для отображения рекорда."""
-        if self.best_time:
-            return f"Рекорд: {self.best_time.toString('mm:ss')}"  # Если рекорд есть — возвращаем время
-        return "Рекорд: —"  # Если нет рекорда
-
-    # ---------- Таймер ----------
+    # === Запуск таймера ===
     def start_timer(self):
-        """Запускает таймер при начале ввода."""
-        if not self.timer_running:  # Проверяем, не запущен ли уже таймер
-            self.time = QTime(0, 0, 0)  # Обнуляем время
-            self.timer.start(1000)  # Запускаем таймер с шагом 1 секунда
-            self.timer_running = True  # Меняем флаг состояния
+        if not self.timer_running:      # Если таймер не запущен
+            self.time = QTime(0,0,0)    # Обнуляем время
+            self.timer.start(1000)      # Запускаем таймер (раз в 1 секунду)
+            self.timer_running = True   # Устанавливаем флаг
 
-    def stop_timer(self):
-        """Останавливает таймер и проверяет рекорд."""
-        if self.timer_running:  # Проверяем, запущен ли таймер
-            self.timer.stop()  # Останавливаем
-            self.timer_running = False  # Меняем флаг
-            self.check_record()  # Проверяем, побит ли рекорд
-
+    # === Обновление времени ===
     def update_timer(self):
-        """Обновляет таймер каждую секунду."""
-        self.time = self.time.addSecs(1)  # Добавляем 1 секунду к времени
-        self.timer_label.setText(f"Время: {self.time.toString('mm:ss')}")  # Обновляем надпись на экране
+        self.time = self.time.addSecs(1) # Добавляем 1 секунду
+        self.timer_label.setText(f"Время: {self.time.toString('mm:ss')}") # Обновляем текст метки
 
-    # ---------- Работа с текстом ----------
+    # === Остановка таймера ===
+    def stop_timer(self):
+        if self.timer_running:          # Если таймер запущен
+            self.timer.stop()           # Останавливаем его
+            self.timer_running = False  # Меняем флаг
+            self.check_record()         # Проверяем, побит ли рекорд
+
+    # === Загрузка текста из файла ===
     def load_text_from_file(self):
-        """Загружает текст из файла text.txt."""
         try:
-            with open("text.txt", "r", encoding="utf-8") as f:  # Открываем файл с текстом
-                self.original_text = " ".join(f.read().split())  # Убираем лишние пробелы и переносы
-            self.original_display.setPlainText(self.original_text)  # Показываем текст на экране
-        except FileNotFoundError:
-            self.original_display.setPlainText("Файл text.txt не найден.")  # Если файла нет — сообщение
-            self.original_text = ""  # Пустой текст
+            with open("text.txt", "r", encoding="utf-8") as f:   # Открываем файл с текстом
+                self.original_text = " ".join(f.read().split())  # Читаем текст и удаляем лишние пробелы
+            self.original_display.setPlainText(self.original_text) # Отображаем текст в поле
+        except FileNotFoundError:                               # Если файл не найден
+            self.original_display.setPlainText("Файл text.txt не найден.")
+            self.original_text = ""
 
+    # === Проверка правильности ввода ===
     def update_display(self):
-        """Подсвечивает правильные и неправильные символы и считает ошибки."""
-        user_text = self.user_input.toPlainText()  # Получаем текст, введённый пользователем
+        user_text = self.user_input.toPlainText()   # Получаем текст, введённый пользователем
 
-        # Запускаем таймер при вводе первого символа
+        # Запуск таймера при первом вводе
         if len(user_text) == 1 and not self.timer_running:
             self.start_timer()
 
-        # Останавливаем таймер, если весь текст введён
-        if len(user_text) >= len(self.original_text) and self.timer_running:
+        if len(user_text) >= len(self.original_text):
             self.stop_timer()
+            # Сохраняем текущий результат
+            self.save_result()
+            previous = self.load_previous_results()
 
-        self.error_count = 0  # Обнуляем счётчик ошибок
+            # Показать сообщение с результатами
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Тест завершён")
+            msg.setText(f"Вы завершили тест!\nВремя: {self.time.toString('mm:ss')}\n\nПредыдущие результаты:\n{previous}")
+            msg.exec()
+            
+            # Можно закрывать окно, если нужно
+            self.close()
+        # Обнуляем ошибки
+        self.error_count = 0
 
-        fmt_correct = QTextCharFormat()  # Формат для правильных символов
-        fmt_correct.setForeground(QColor("green"))  # Цвет — зелёный
-
-        fmt_error = QTextCharFormat()  # Формат для ошибок
-        fmt_error.setForeground(QColor("red"))  # Цвет — красный
-
-        text_cursor = self.original_display.textCursor()  # Получаем курсор редактирования текста
-        text_cursor.select(QTextCursor.SelectionType.Document)  # Выбираем весь текст
-        text_cursor.setCharFormat(QTextCharFormat())  # Сбрасываем формат (убираем старую подсветку)
-
-        # Подсветка символов
-        for i, char in enumerate(user_text):  # Перебираем символы, которые ввёл пользователь
-            text_cursor.setPosition(i)  # Ставим курсор на позицию символа
-            text_cursor.movePosition(QTextCursor.MoveOperation.Right,
-                                     QTextCursor.MoveMode.KeepAnchor, 1)  # Выделяем символ
-            if i < len(self.original_text) and char == self.original_text[i]:  # Проверяем совпадение с оригиналом
-                text_cursor.setCharFormat(fmt_correct)  # Если совпадает — зелёный
-            else:
-                text_cursor.setCharFormat(fmt_error)  # Если ошибка — красный
-                self.error_count += 1  # Увеличиваем счётчик ошибок
-
-        # Подсвечиваем оставшийся текст серым
+        # Настраиваем форматы цвета
+        fmt_correct = QTextCharFormat()
+        fmt_correct.setForeground(QColor("green"))  # Зелёный для правильных символов
+        fmt_error = QTextCharFormat()
+        fmt_error.setForeground(QColor("red"))      # Красный для ошибок
         fmt_future = QTextCharFormat()
-        fmt_future.setForeground(QColor("gray"))  # Цвет для ещё не введённого текста
-        if len(user_text) < len(self.original_text):  # Если пользователь не дописал до конца
-            text_cursor.setPosition(len(user_text))  # Ставим курсор на текущую позицию
-            text_cursor.movePosition(QTextCursor.MoveOperation.End,
-                                     QTextCursor.MoveMode.KeepAnchor)  # Выделяем оставшийся текст
-            text_cursor.setCharFormat(fmt_future)  # Применяем серый цвет
+        fmt_future.setForeground(QColor("gray"))    # Серый для ещё не введённого текста
 
-        # Обновляем счётчик ошибок на экране
+        # Получаем курсор для редактирования форматирования текста
+        cursor = self.original_display.textCursor()
+        cursor.select(QTextCursor.SelectionType.Document)  # Выделяем весь текст
+        cursor.setCharFormat(QTextCharFormat())            # Сбрасываем предыдущее форматирование
+
+        # Проходим по каждому введённому символу
+        for i, char in enumerate(user_text):
+            cursor.setPosition(i)   # Переходим к символу
+            cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, 1) # Захватываем его
+            if i < len(self.original_text) and char == self.original_text[i]: # Если символ совпадает
+                cursor.setCharFormat(fmt_correct)  # Зелёный
+            else:
+                cursor.setCharFormat(fmt_error)    # Красный
+                self.error_count += 1              # Увеличиваем счётчик ошибок
+
+        # Подсветка ещё не введённого текста
+        if len(user_text) < len(self.original_text):
+            cursor.setPosition(len(user_text))
+            cursor.movePosition(QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor)
+            cursor.setCharFormat(fmt_future)
+
+        # Обновляем метку ошибок
         self.error_label.setText(f"Ошибок: {self.error_count}")
+        self.scroll_to_position(len(user_text))  # Прокручиваем текст, если он длинный
 
-        # Прокручиваем оригинальный текст, чтобы текущая позиция всегда была видна
-        self.scroll_to_position(len(user_text))
-
+    # === Прокрутка текста ===
     def scroll_to_position(self, pos):
-        """Прокручивает текст, чтобы текущая позиция была видна."""
-        cursor = self.original_display.textCursor()  # Получаем курсор текста
-        cursor.setPosition(pos)  # Устанавливаем позицию курсора
-        self.original_display.setTextCursor(cursor)  # Применяем курсор
-        self.original_display.ensureCursorVisible()  # Прокручиваем, чтобы курсор был виден
+        cursor = self.original_display.textCursor()
+        cursor.setPosition(pos)
+        self.original_display.setTextCursor(cursor)
+        self.original_display.ensureCursorVisible()
 
-    # ---------- Проверка рекорда ----------
+    # === Загрузка рекорда ===
+    def load_record(self):
+        try:
+            with open(self.record_file, "r", encoding="utf-8") as f:
+                record_str = f.read().strip()  # Читаем строку
+                if record_str:
+                    self.best_time = QTime.fromString(record_str, "mm:ss")  # Преобразуем строку во время
+        except FileNotFoundError:
+            self.best_time = None  # Если файла нет — рекорд отсутствует
+
+    # === Сохранение рекорда ===
+    def save_record(self):
+        if self.best_time:
+            with open(self.record_file, "w", encoding="utf-8") as f:
+                f.write(self.best_time.toString("mm:ss"))  # Записываем рекорд в файл
+
+    # === Проверка нового рекорда ===
     def check_record(self):
-        """Сравнивает текущее время с рекордом и обновляет его, если побит."""
-        if self.error_count > 0:  # Если есть ошибки
-            QMessageBox.information(self, "Результат",
-                                    f"Вы закончили с ошибками ({self.error_count}). Время: {self.time.toString('mm:ss')}")
-            return  # Не обновляем рекорд при ошибках
-
-        # Если рекорда нет или текущее время лучше
-        if not self.best_time or self.time < self.best_time:
+        if self.error_count > 0:  # Если есть ошибки — не засчитываем
+            return
+        if not self.best_time or self.time < self.best_time:  # Если нет рекорда или текущее время лучше
             self.best_time = self.time  # Сохраняем новый рекорд
-            self.save_record()  # Пишем рекорд в файл
-            self.record_label.setText(self.get_record_text())  # Обновляем метку рекорда
-            QMessageBox.information(self, "Новый рекорд!",
-                                    f"Поздравляем! Новый рекорд: {self.best_time.toString('mm:ss')}")
-        else:
-            # Просто показываем текущее время, если рекорд не побит
-            QMessageBox.information(self, "Результат",
-                                    f"Ваше время: {self.time.toString('mm:ss')}\nРекорд: {self.best_time.toString('mm:ss')}")
+            self.save_record()          # Записываем в файл
 
 
-# ---------- Точка входа ----------
+# ---------- Запуск приложения ----------
 if __name__ == "__main__":
-    app = QApplication(sys.argv)  # Создаём приложение
-    window = TypingTrainer()  # Создаём окно тренажёра
-    window.resize(800, 400)  # Устанавливаем размер окна
-    window.show()  # Показываем окно
-    sys.exit(app.exec())  # Запускаем главный цикл приложения
+    app = QApplication(sys.argv)  # Создаём приложение Qt
+    window = TypingTrainer()      # Создаём объект главного окна
+    window.show()                 # Показываем окно
+    sys.exit(app.exec())          # Запускаем цикл событий и выходим при закрытии
