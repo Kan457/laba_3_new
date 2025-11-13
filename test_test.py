@@ -1,107 +1,109 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QWidget, QTextEdit, QLabel, QPushButton
+from PyQt6.QtWidgets import QApplication, QWidget, QTextEdit, QLabel, QPushButton, QMessageBox
 from PyQt6.QtGui import QTextCharFormat, QColor, QTextCursor, QFont, QPixmap
 from PyQt6.QtCore import Qt, QTimer, QTime, QSettings
-from button import keyboard_buttons  # Список кнопок: ('Q', x, y, w, h, цвет)
 
-class TypingTrainer(QWidget):
-    def __init__(self):
-        super().__init__()
+# импортируем клавиатуру из отдельного файла
+from keyboard import keyboard_buttons  # <-- здесь твой список клавиш
 
-        self.setWindowTitle("Тренажёр набора текста")
-        self.resize(900, 650)
-        self.setMinimumSize(600, 400)  # Можно менять размер окна
-
-        # Основные переменные
-        self.original_text = ""
-        self.error_count = 0
-        self.timer_running = False
-        self.time = QTime(0, 0, 0)
-        self.best_time = None
+class KeyboardWidget(QWidget):
+    """Клавиатура для ввода текста"""
+    def __init__(self, parent, input_field):
+        super().__init__(parent)
+        self.input_field = input_field
         self.buttons = {}
-
-        # QSettings для хранения рекорда
-        self.settings = QSettings("TypingTrainerCompany", "TypingTrainerApp")
-
-        # Интерфейс
-        self.init_ui()
         self.create_keyboard()
-        self.load_text_from_file()
-        self.load_record()
 
-        # Таймер
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_timer)
-
-        # Кнопка выхода
-        self.create_exit_button()
-
-    # Интерфейс
-    def init_ui(self):
-        base_font = QFont("Segoe Script", 14)
-
-        # Фон окна
-        self.background_label = QLabel(self)
-        self.background_label.setPixmap(QPixmap("w.jpg"))  # путь к вашей картинке
-        self.background_label.setScaledContents(True)
-        self.background_label.setGeometry(0, 0, self.width(), self.height())
-        self.background_label.lower()  # отправляем на задний план
-
-        # Текст для отображения оригинала
-        self.original_display = QTextEdit(self)
-        self.original_display.setReadOnly(True)
-        self.original_display.setFont(base_font)
-        self.original_display.setGeometry(10, 10, 880, 180)
-
-        # Поле ввода
-        self.user_input = QTextEdit(self)
-        self.user_input.setFont(base_font)
-        self.user_input.setGeometry(10, 210, 880, 50)
-        self.user_input.textChanged.connect(self.update_display)
-
-        # Метки ошибок и времени
-        self.error_label = QLabel("Ошибок: 0", self)
-        self.error_label.setFont(base_font)
-        self.error_label.setGeometry(10, 260, 200, 30)
-
-        self.timer_label = QLabel("Время: 00:00", self)
-        self.timer_label.setFont(base_font)
-        self.timer_label.setGeometry(150, 260, 200, 30)
-
-        self.best_time_label = QLabel("Рекорд: —", self)
-        self.best_time_label.setFont(base_font)
-        self.best_time_label.setGeometry(270, 260, 200, 30)
-        self.best_time_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-
-    # Виртуальная клавиатура
     def create_keyboard(self):
         for name, x, y, w, h, color in keyboard_buttons:
             btn = QPushButton(name, self)
-            btn.setGeometry(x, y, w, h)
             btn.setStyleSheet(f"""
                 background-color: {color};
                 border-radius: 5px;
                 font-weight: bold;
             """)
-            btn.clicked.connect(lambda checked, key=name: self.insert_key(key))  # Вставка символа при клике
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn.clicked.connect(lambda checked, key=name: self.insert_key(key))
             self.buttons[name.upper()] = btn
 
-    # Вставка символа в поле ввода
     def insert_key(self, key):
-        cursor = self.user_input.textCursor()
-        cursor.insertText(key)
-        self.user_input.setTextCursor(cursor)
-        self.update_display()  # обновление подсветки текста
+        cursor = self.input_field.textCursor()
+        if key == "Backspace":
+            cursor.deletePreviousChar()
+        elif key == "Enter":
+            cursor.insertText("\n")
+        elif key == "Space":
+            cursor.insertText(" ")
+        else:
+            cursor.insertText(key)
+        self.input_field.setTextCursor(cursor)
+        # обновляем подсветку текста, если есть метод
+        if hasattr(self.input_field.parent(), 'update_display'):
+            self.input_field.parent().update_display()
 
-    # Кнопка выхода
-    def create_exit_button(self):
-        button_width = 100
-        button_height = 30
-        margin_right = 10
-        x_pos = self.width() - button_width - margin_right
-        y_pos = 260
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        w, h = self.width(), self.height()
+        base_w, base_h = 900, 250  # базовые размеры для масштабирования
+        for name, x, y, bw, bh, color in keyboard_buttons:
+            btn = self.buttons[name.upper()]
+            new_x = int(x / base_w * w)
+            new_y = int(y / base_h * h)
+            new_w = max(int(bw / base_w * w), 30)
+            new_h = max(int(bh / base_h * h), 30)
+            btn.setGeometry(new_x, new_y, new_w, new_h)
+
+
+class TypingTrainer(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Тренажёр набора текста")
+        self.resize(900, 650)
+        self.setMinimumSize(600, 400)
+
+        self.original_text = ""
+        self.error_count = 0
+        self.timer_running = False
+        self.time = QTime(0, 0, 0)
+        self.best_time = None
+
+        self.settings = QSettings("TypingTrainerCompany", "TypingTrainerApp")
+
+        self.background_label = QLabel(self)
+        self.background_label.setPixmap(QPixmap("w.jpg"))
+        self.background_label.setScaledContents(True)
+        self.background_label.lower()
+
+        self.init_ui()
+        self.load_text_from_file()
+        self.load_record()
+
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_timer)
+
+        # Клавиатура
+        self.keyboard_widget = KeyboardWidget(self, self.user_input)
+
+    def init_ui(self):
+        base_font = QFont("Segoe Script", 14)
+
+        self.original_display = QTextEdit(self)
+        self.original_display.setReadOnly(True)
+        self.original_display.setFont(base_font)
+
+        self.user_input = QTextEdit(self)
+        self.user_input.setFont(base_font)
+        self.user_input.textChanged.connect(self.update_display)
+
+        self.error_label = QLabel("Ошибок: 0", self)
+        self.error_label.setFont(base_font)
+        self.timer_label = QLabel("Время: 00:00", self)
+        self.timer_label.setFont(base_font)
+        self.best_time_label = QLabel("Рекорд: —", self)
+        self.best_time_label.setFont(base_font)
+        self.best_time_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+
         self.exit_button = QPushButton("Выйти", self)
-        self.exit_button.setGeometry(x_pos, y_pos, button_width, button_height)
         self.exit_button.setStyleSheet("""
             background-color: black;
             color: white;
@@ -110,34 +112,15 @@ class TypingTrainer(QWidget):
         """)
         self.exit_button.clicked.connect(self.close)
 
-    # Таймер
-    def start_timer(self):
-        if not self.timer_running:
-            self.time = QTime(0, 0, 0)
-            self.timer.start(1000)
-            self.timer_running = True
-
-    def update_timer(self):
-        self.time = self.time.addSecs(1)
-        self.timer_label.setText(f"Время: {self.time.toString('mm:ss')}")
-
-    def stop_timer(self):
-        if self.timer_running:
-            self.timer.stop()
-            self.timer_running = False
-            self.check_record()
-
-    # Загрузка текста
+    # ---------------- Методы для текста и таймера ----------------
     def load_text_from_file(self):
         try:
             with open("text.txt", "r", encoding="utf-8") as f:
                 self.original_text = f.read()
-            self.original_display.setPlainText(self.original_text)
         except FileNotFoundError:
             self.original_text = "Файл text.txt не найден."
-            self.original_display.setPlainText(self.original_text)
+        self.original_display.setPlainText(self.original_text)
 
-    # Проверка ввода
     def update_display(self):
         user_text = self.user_input.toPlainText()
         if len(user_text) == 1 and not self.timer_running:
@@ -145,7 +128,6 @@ class TypingTrainer(QWidget):
 
         if len(user_text) >= len(self.original_text):
             self.stop_timer()
-            from PyQt6.QtWidgets import QMessageBox
             msg = QMessageBox(self)
             msg.setWindowTitle("Тест завершён")
             msg.setText(
@@ -183,21 +165,31 @@ class TypingTrainer(QWidget):
             cursor.setCharFormat(fmt_future)
 
         self.error_label.setText(f"Ошибок: {self.error_count}")
-        self.scroll_to_position(len(user_text))
 
-    def scroll_to_position(self, pos):
-        cursor = self.original_display.textCursor()
-        cursor.setPosition(pos)
-        self.original_display.setTextCursor(cursor)
-        self.original_display.ensureCursorVisible()
+    def start_timer(self):
+        if not self.timer_running:
+            self.time = QTime(0, 0, 0)
+            self.timer.start(1000)
+            self.timer_running = True
 
-    # Рекорд через QSettings
+    def update_timer(self):
+        self.time = self.time.addSecs(1)
+        self.timer_label.setText(f"Время: {self.time.toString('mm:ss')}")
+
+    def stop_timer(self):
+        if self.timer_running:
+            self.timer.stop()
+            self.timer_running = False
+            self.check_record()
+
     def load_record(self):
         record_str = self.settings.value("best_time", "")
         if record_str:
             self.best_time = QTime.fromString(record_str, "mm:ss")
         else:
             self.best_time = None
+        if self.best_time:
+            self.best_time_label.setText(f"Рекорд: {self.best_time.toString('mm:ss')}")
 
     def save_record(self):
         if self.best_time:
@@ -211,14 +203,25 @@ class TypingTrainer(QWidget):
             self.save_record()
             self.best_time_label.setText(f"Рекорд: {self.best_time.toString('mm:ss')}")
 
-    # Адаптивная кнопка выхода при изменении окна
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self.background_label.setGeometry(0, 0, self.width(), self.height())
-        button_width = 100
-        margin_right = 10
-        x_pos = self.width() - button_width - margin_right
-        self.exit_button.setGeometry(x_pos, 260, button_width, 30)
+        w, h = self.width(), self.height()
+        self.background_label.setGeometry(0, 0, w, h)
+
+        top_height = h // 3
+        self.original_display.setGeometry(10, 10, w - 20, top_height)
+        input_height = h // 12
+        self.user_input.setGeometry(10, 20 + top_height, w - 20, input_height)
+
+        label_y = 30 + top_height + input_height
+        self.error_label.setGeometry(10, label_y, w // 4, 30)
+        self.timer_label.setGeometry(w // 4, label_y, w // 4, 30)
+        self.best_time_label.setGeometry(w // 2, label_y, w // 2 - 20, 30)
+        self.exit_button.setGeometry(w - 110, label_y, 100, 30)
+
+        keyboard_top = label_y + 50
+        keyboard_height = h - keyboard_top - 10
+        self.keyboard_widget.setGeometry(0, keyboard_top, w, keyboard_height)
 
 
 if __name__ == "__main__":
