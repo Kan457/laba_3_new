@@ -101,22 +101,33 @@ class HelpDialog(QDialog):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Помощь")
-        self.setFixedSize(800, 600)
+        self.setMinimumSize(400, 300)  # минимальный размер окна
 
-        lay = QVBoxLayout(self)
-        lbl = QLabel()
-        px = QPixmap("k.jpg")
-        if not px.isNull():
-            lbl.setPixmap(px.scaled(760, 520, Qt.AspectRatioMode.KeepAspectRatio))
-        else:
-            lbl.setText("Нет изображения")
+        # === Основной лейаут ===
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
 
-        lay.addWidget(lbl)
+        # === Картинка ===
+        self.lbl = QLabel(self)
+        self.lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.pixmap = QPixmap("k.jpg")
+        self.lbl.setPixmap(self.pixmap)
+        self.lbl.setScaledContents(True)  # масштабирование по размеру окна
+        self.layout.addWidget(self.lbl)
 
-        btn = QPushButton("Закрыть")
-        btn.setFont(QFont("Segoe Script", 14))
-        btn.clicked.connect(self.close)
-        lay.addWidget(btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        # === Кнопка "Закрыть" внизу ===
+        self.btn_close = QPushButton("Закрыть", self)
+        self.btn_close.setFont(QFont("Segoe Script", 14))
+        self.btn_close.setStyleSheet("background-color: red; color: white; border-radius: 5px;")
+        self.btn_close.clicked.connect(self.close)
+        self.layout.addWidget(self.btn_close, alignment=Qt.AlignmentFlag.AlignCenter)
+
+    # Обновляем размер картинки при изменении окна
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not self.pixmap.isNull():
+            self.lbl.setPixmap(self.pixmap.scaled(self.lbl.size(), Qt.AspectRatioMode.KeepAspectRatio))
 
 
 class WordTrainer(QWidget):
@@ -172,7 +183,7 @@ class WordTrainer(QWidget):
         self.main_area = QVBoxLayout()
         self.main_area.addLayout(top_bar)
         self.main_area.addStretch(1)
-        self.main_area.addWidget(self.error_msg)   # ← ВСТАВЛЕНО
+        self.main_area.addWidget(self.error_msg)
         self.main_area.addWidget(self.word_label)
         self.main_area.addWidget(self.input, alignment=Qt.AlignmentFlag.AlignCenter)
         self.main_area.addWidget(self.error_label, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -216,10 +227,8 @@ class WordTrainer(QWidget):
         else:
             self.word_label.setText("Готово!")
             self.input.setDisabled(True)
-
         self.highlight_expected()
 
-    # === ФУНКЦИЯ СООБЩЕНИЯ ОБ ОШИБКЕ ===
     def show_error_message(self):
         self.error_msg.setText("Ошибка")
         self.error_msg.show()
@@ -232,7 +241,6 @@ class WordTrainer(QWidget):
     def check_live(self):
         word = self.words[self.index]
         typed = self.input.text()
-
         if typed == word[:len(typed)]:
             self.input.setStyleSheet("color:green;")
         else:
@@ -242,7 +250,6 @@ class WordTrainer(QWidget):
     def check_word(self):
         word = self.words[self.index]
         typed = self.input.text()
-
         if typed == word:
             self.index += 1
             self.show_word()
@@ -258,17 +265,13 @@ class WordTrainer(QWidget):
         kb_h = H * 0.50
         kb_w = W - 40
         self.keyboard.resize_keyboard(kb_w, kb_h)
-
         scale = W / BASE_W
-
         self.word_label.setFont(QFont("Segoe Script", max(18, int(40 * scale))))
         self.input.setFont(QFont("Segoe Script", max(14, int(22 * scale))))
         self.error_label.setFont(QFont("Segoe Script", max(12, int(18 * scale))))
         self.error_msg.setFont(QFont("Segoe Script", max(14, int(16 * scale)), QFont.Weight.Bold))
-
         self.help_btn.setFont(QFont("Segoe Script", max(10, int(14 * scale))))
         self.exit_btn.setFont(QFont("Segoe Script", max(10, int(14 * scale))))
-
         self.input.setFixedWidth(int(W * 0.5))
         self.input.setFixedHeight(int(45 * scale))
 
@@ -281,7 +284,6 @@ class WordTrainer(QWidget):
             if event.type() == QEvent.Type.KeyPress:
                 key = event.key()
                 ch = event.text()
-
                 if key == Qt.Key.Key_Space:
                     self.keyboard.highlight("space")
                 elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -292,17 +294,14 @@ class WordTrainer(QWidget):
                     self.keyboard.highlight(ch.lower())
                 else:
                     self.keyboard.highlight(None)
-
             elif event.type() == QEvent.Type.KeyRelease:
                 QTimer.singleShot(30, self.highlight_expected)
-
         return super().eventFilter(obj, event)
 
     def highlight_expected(self):
         if self.index < len(self.words):
             w = self.words[self.index]
             pos = len(self.input.text())
-
             if pos < len(w):
                 self.keyboard.highlight(w[pos])
             else:

@@ -3,8 +3,7 @@ from PyQt6.QtWidgets import QApplication, QWidget, QTextEdit, QLabel, QPushButto
 from PyQt6.QtGui import QTextCharFormat, QColor, QTextCursor, QFont, QPixmap, QKeyEvent
 from PyQt6.QtCore import Qt, QTimer, QTime, QSettings
 
-# Пример keyboard_buttons
-from keyboard import keyboard_buttons  
+from keyboard import keyboard_buttons  # файл с раскладкой клавиатуры
 
 
 class KeyboardWidget(QWidget):
@@ -94,6 +93,7 @@ class TypingTrainer(QWidget):
 
         self.settings = QSettings("TypingTrainerCompany", "TypingTrainerApp")
 
+        # Фон
         self.background_label = QLabel(self)
         try:
             self.background_label.setPixmap(QPixmap("u.png"))
@@ -109,6 +109,7 @@ class TypingTrainer(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_timer)
 
+        # Виртуальная клавиатура
         self.keyboard_widget = KeyboardWidget(self, self.user_input)
         QTimer.singleShot(100, self.update_caret_and_keyboard)
 
@@ -139,7 +140,7 @@ class TypingTrainer(QWidget):
         self.exit_button.setStyleSheet("background-color:black; color:white; font-weight:bold; border-radius:5px;")
         self.exit_button.clicked.connect(self.go_to_main)
 
-    # =============== Каретка + виртуальная клавиатура ===============
+    # =================== Каретка + виртуальная клавиатура ===================
     def update_caret_and_keyboard(self):
         pos = len(self.user_input.toPlainText())
         if pos >= len(self.original_text):
@@ -223,13 +224,14 @@ class TypingTrainer(QWidget):
             self.stop_timer()
             self.check_record()
 
+            # После завершения теста показываем время и количество ошибок
             QMessageBox.information(
                 self,
                 "Тест завершён",
-                f"Вы завершили тест!\nВремя: {self.time.toString('mm:ss')}"
+                f"Вы завершили тест!\nВремя: {self.time.toString('mm:ss')}\nОшибок: {self.error_count}"
             )
 
-            self.go_to_main()
+            #self.go_to_main()
             return
 
         fmt_correct = QTextCharFormat(); fmt_correct.setForeground(QColor("green"))
@@ -333,7 +335,7 @@ class TypingTrainer(QWidget):
         self.keyboard_widget.setGeometry(0, keyboard_top, w, keyboard_height)
 
 
-# ============= Запуск ============
+# ============= Запуск =============
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = TypingTrainer()
