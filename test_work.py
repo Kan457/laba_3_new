@@ -6,8 +6,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QPixmap, QPainter
 from PyQt6.QtCore import Qt, QTimer, QEvent
 
-from keyboard import keyboard_buttons  # твой файл с кнопками
-
+from keyboard import keyboard_buttons
 
 BASE_W = 900
 BASE_H = 700
@@ -34,6 +33,7 @@ class KeyboardWidget(QWidget):
             btn = QPushButton(name, self)
             btn.base_color = color
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            # Убираем жирный шрифт, используем Segoe Script
             btn.setFont(QFont("Segoe Script", 12))
             btn.setStyleSheet(f"background-color:{color}; border-radius:5px;")
             btn.clicked.connect(lambda c, n=name: self.click(n))
@@ -73,6 +73,7 @@ class KeyboardWidget(QWidget):
             key = self.alias[key]
 
         key = str(key).lower()
+
         target = None
         if key in self.norm_map:
             target = self.norm_map[key]
@@ -155,7 +156,7 @@ class WordTrainer(QWidget):
         )
 
         self.exit_btn = QPushButton("Выйти")
-        self.exit_btn.clicked.connect(self.go_to_main)  # отложенный импорт
+        self.exit_btn.clicked.connect(self.close)
         self.exit_btn.setFont(QFont("Segoe Script", 18))
         self.exit_btn.setStyleSheet(
             "background-color: black; color: white; border-radius: 5px;"
@@ -186,13 +187,6 @@ class WordTrainer(QWidget):
         self.input.installEventFilter(self)
 
         QTimer.singleShot(100, self.resize_all)
-
-    def go_to_main(self):
-        # Отложенный импорт для предотвращения циклической зависимости
-        from start_file import MyApp
-        self.main_window = MyApp()
-        self.main_window.show()
-        self.close()
 
     def paintEvent(self, event):
         painter = QPainter(self)

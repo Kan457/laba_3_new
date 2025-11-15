@@ -1,10 +1,10 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QWidget, QTextEdit, QLabel, QPushButton, QMessageBox
-from PyQt6.QtGui import QTextCharFormat, QColor, QTextCursor, QFont, QPixmap, QKeyEvent
+from PyQt6.QtGui import QTextCharFormat, QColor, QTextCursor, QFont, QPixmap
 from PyQt6.QtCore import Qt, QTimer, QTime, QSettings
+from start_file import MyApp
+from keyboard import keyboard_buttons  # твой список кнопок клавиатуры
 
-# Пример keyboard_buttons
-from keyboard import keyboard_buttons  
 
 class KeyboardWidget(QWidget):
     def __init__(self, parent, input_field):
@@ -26,12 +26,10 @@ class KeyboardWidget(QWidget):
             self.key_ids.append(key_id)
 
     def highlight_key(self, key):
-        # Сброс всех кнопок
         for idx, (name, *_rest) in enumerate(keyboard_buttons):
             btn = self.buttons[self.key_ids[idx]]
             btn.setStyleSheet(f"background-color: {btn.base_color}; border-radius:5px; font-weight:bold;")
         key_lower = key.lower()
-        # Подсветка нужной кнопки
         for idx, (name, *_rest) in enumerate(keyboard_buttons):
             if name.lower() == key_lower:
                 btn = self.buttons[self.key_ids[idx]]
@@ -48,7 +46,6 @@ class KeyboardWidget(QWidget):
         elif k_lower == "space":
             cursor.insertText(" ")
         else:
-            # Всегда строчные
             cursor.insertText(key.lower())
         self.input_field.setTextCursor(cursor)
         parent = self.input_field.parent()
@@ -70,8 +67,9 @@ class KeyboardWidget(QWidget):
 
 
 class TypingTrainer(QWidget):
-    def __init__(self):
+    def __init__(self, parent_app=None):
         super().__init__()
+        self.parent_app = parent_app
         self.setWindowTitle("Тренажёр набора текста")
         self.resize(900, 650)
         self.setMinimumSize(600, 400)
@@ -103,6 +101,9 @@ class TypingTrainer(QWidget):
         # Подсветка первой буквы при запуске
         QTimer.singleShot(100, self.update_caret_and_keyboard)
 
+        # Кнопка "Выйти" теперь возвращает на MyApp
+        self.exit_button.clicked.connect(self.go_to_main)
+
     def init_ui(self):
         base_font = QFont("Segoe Script", 14)
         self.original_display = QTextEdit(self)
@@ -122,8 +123,14 @@ class TypingTrainer(QWidget):
         self.best_time_label.setAlignment(Qt.AlignmentFlag.AlignRight)
 
         self.exit_button = QPushButton("Выйти", self)
-        self.exit_button.setStyleSheet("background-color:black; color:white; font-weight:bold; border-radius:5px;")
-        self.exit_button.clicked.connect(self.close)
+        self.exit_button.setStyleSheet(
+            "background-color:black; color:white; font-weight:bold; border-radius:5px;"
+        )
+
+    def return_to_main(self):
+        self.close()
+        if self.parent_app:
+            self.parent_app.show()
 
     # ================= Каретка и подсветка клавиш =====================
     def update_caret_and_keyboard(self):
@@ -146,9 +153,8 @@ class TypingTrainer(QWidget):
         cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, 1)
         cursor.setCharFormat(fmt_cursor)
 
-    # =============== Поддержка физической клавиатуры ==================
-        # =============== Поддержка физической клавиатуры ==================
-    def keyPressEvent(self, event: QKeyEvent):
+    # ====================== Поддержка физической клавиатуры ===================
+    def keyPressEvent(self, event):
         pos = len(self.user_input.toPlainText())
         if pos >= len(self.original_text):
             return
@@ -157,41 +163,22 @@ class TypingTrainer(QWidget):
         keycode = event.key()
         text = event.text().lower()
 
-        # ------- ОБРАБОТКА СПЕЦКЛАВИШ -------
         if keycode == Qt.Key.Key_Space:
             pressed = " "
             virt = "Space"
-
         elif keycode in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             pressed = "\n"
             virt = "Enter"
-
-        elif keycode == Qt.Key.Key_Tab:
-            pressed = "\t"
-            virt = "Tab"
-
         elif keycode == Qt.Key.Key_Backspace:
             pressed = None
             virt = "Backspace"
             self.user_input.textCursor().deletePreviousChar()
             self.keyboard_widget.highlight_key(virt)
             return
-
-        elif keycode in (Qt.Key.Key_Shift,):
-            pressed = None
-            virt = "Shift_L" if event.modifiers() & Qt.KeyboardModifier.ShiftModifier else "Shift_R"
-            self.keyboard_widget.highlight_key(virt)
-            return
-
         else:
-            # Обычные буквы/символы
-            if text:
-                pressed = text
-                virt = text
-            else:
-                return
+            pressed = text
+            virt = text
 
-        # ------- ПРОВЕРКА ПРАВИЛЬНОСТИ -------
         if pressed == expected:
             self.user_input.insertPlainText(pressed)
             self.update_display()
@@ -199,12 +186,9 @@ class TypingTrainer(QWidget):
             self.error_count += 1
             self.error_label.setText(f"Ошибок: {self.error_count}")
 
-        # Подсветка нажатой виртуальной клавиши
         self.keyboard_widget.highlight_key(virt)
 
-
-    def keyReleaseEvent(self, event: QKeyEvent):
-        # При отпускании любой клавиши — подсветка следующего ожидаемого символа
+    def keyReleaseEvent(self, event):
         self.update_caret_and_keyboard()
 
     # ---------------- Методы для текста и таймера ----------------
@@ -228,7 +212,7 @@ class TypingTrainer(QWidget):
             msg.setText(f"Вы завершили тест!\nВремя: {self.time.toString('mm:ss')}\n\n"
                         f"Рекорд: {self.best_time.toString('mm:ss') if self.best_time else '—'}")
             msg.exec()
-            self.close()
+            self.return_to_main()
             return
 
         self.error_count = 0
@@ -269,6 +253,13 @@ class TypingTrainer(QWidget):
     def update_timer(self):
         self.time = self.time.addSecs(1)
         self.timer_label.setText(f"Время: {self.time.toString('mm:ss')}")
+
+    def go_to_main(self):
+        # Отложенный импорт для предотвращения циклической зависимости
+        from start_file import MyApp
+        self.main_window = MyApp()
+        self.main_window.show()
+        self.close()
 
     def stop_timer(self):
         if self.timer_running:
@@ -324,6 +315,6 @@ class TypingTrainer(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = TypingTrainer()
-    window.show()
-    sys.exit(app.exec())
+    win = TypingTrainer()  # Создаём окно тренажёра
+    win.show()  # Показываем окно
+    sys.exit(app.exec())  # Запускаем цикл приложения

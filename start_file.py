@@ -104,6 +104,7 @@ class MyApp(QWidget):
         self.test_window = TypingTrainer()
         self.test_window.show()
         self.close()
+        
 
 
 if __name__ == "__main__":
