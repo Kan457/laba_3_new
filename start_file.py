@@ -96,14 +96,14 @@ class MyApp(QWidget):
 
     # Методы открытия окон
     def open_word_trainer(self):
-        self.trainer_window = WordTrainer()
+        self.trainer_window = WordTrainer(parent_app=self)  # передаём ссылку
         self.trainer_window.show()
-        self.close()
+        self.hide()  # прячем главное окно
 
     def open_typing_trainer(self):
-        self.test_window = TypingTrainer()
+        self.test_window = TypingTrainer(parent_app=self)
         self.test_window.show()
-        self.close()
+        self.hide()
         
 
 

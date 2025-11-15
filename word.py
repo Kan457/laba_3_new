@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QPixmap, QPainter
 from PyQt6.QtCore import Qt, QTimer, QEvent
 
-from keyboard import keyboard_buttons  # твой файл с кнопками
+from keyboard import keyboard_buttons  # файл с раскладкой клавиатуры
 
 
 BASE_W = 900
@@ -120,17 +120,25 @@ class HelpDialog(QDialog):
 
 
 class WordTrainer(QWidget):
-    def __init__(self):
+    def __init__(self, parent_app=None):
         super().__init__()
+        self.parent_app = parent_app
         self.setWindowTitle("Тренажёр слов")
         self.setMinimumSize(650, 500)
 
         # === ФОН ===
-        self.bg = QPixmap("j.jpg")
+        self.bg = QPixmap("r.jpg")
 
         self.words = self.load_words()
         self.index = 0
         self.errors = 0
+
+        # === СООБЩЕНИЕ ОБ ОШИБКЕ ===
+        self.error_msg = QLabel("")
+        self.error_msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.error_msg.setFont(QFont("Segoe Script", 16, QFont.Weight.Bold))
+        self.error_msg.setStyleSheet("color: red;")
+        self.error_msg.hide()
 
         self.word_label = QLabel("")
         self.word_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -146,20 +154,15 @@ class WordTrainer(QWidget):
         self.error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.error_label.setFont(QFont("Segoe Script", 18))
 
-        # ==== Кнопки с шрифтом Segoe Script ====
         self.help_btn = QPushButton("Помощь")
         self.help_btn.clicked.connect(lambda: HelpDialog().exec())
         self.help_btn.setFont(QFont("Segoe Script", 18))
-        self.help_btn.setStyleSheet(
-            "background-color: red; color: white; border-radius: 5px;"
-        )
+        self.help_btn.setStyleSheet("background-color: red; color: white; border-radius: 5px;")
 
         self.exit_btn = QPushButton("Выйти")
-        self.exit_btn.clicked.connect(self.go_to_main)  # отложенный импорт
+        self.exit_btn.clicked.connect(self.go_to_main)
         self.exit_btn.setFont(QFont("Segoe Script", 18))
-        self.exit_btn.setStyleSheet(
-            "background-color: black; color: white; border-radius: 5px;"
-        )
+        self.exit_btn.setStyleSheet("background-color: black; color: white; border-radius: 5px;")
 
         top_bar = QHBoxLayout()
         top_bar.addWidget(self.exit_btn)
@@ -169,6 +172,7 @@ class WordTrainer(QWidget):
         self.main_area = QVBoxLayout()
         self.main_area.addLayout(top_bar)
         self.main_area.addStretch(1)
+        self.main_area.addWidget(self.error_msg)   # ← ВСТАВЛЕНО
         self.main_area.addWidget(self.word_label)
         self.main_area.addWidget(self.input, alignment=Qt.AlignmentFlag.AlignCenter)
         self.main_area.addWidget(self.error_label, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -188,11 +192,9 @@ class WordTrainer(QWidget):
         QTimer.singleShot(100, self.resize_all)
 
     def go_to_main(self):
-        # Отложенный импорт для предотвращения циклической зависимости
-        from start_file import MyApp
-        self.main_window = MyApp()
-        self.main_window.show()
         self.close()
+        if self.parent_app:
+            self.parent_app.show()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -217,6 +219,12 @@ class WordTrainer(QWidget):
 
         self.highlight_expected()
 
+    # === ФУНКЦИЯ СООБЩЕНИЯ ОБ ОШИБКЕ ===
+    def show_error_message(self):
+        self.error_msg.setText("Ошибка")
+        self.error_msg.show()
+        QTimer.singleShot(700, lambda: self.error_msg.hide())
+
     def insert_char(self, ch):
         self.input.insert(ch)
         self.check_live()
@@ -229,6 +237,7 @@ class WordTrainer(QWidget):
             self.input.setStyleSheet("color:green;")
         else:
             self.input.setStyleSheet("color:red;")
+            self.show_error_message()
 
     def check_word(self):
         word = self.words[self.index]
@@ -241,11 +250,11 @@ class WordTrainer(QWidget):
             self.errors += 1
             self.error_label.setText(f"Ошибок: {self.errors}")
             self.input.selectAll()
+            self.show_error_message()
 
     def resize_all(self):
         W = self.width()
         H = self.height()
-
         kb_h = H * 0.50
         kb_w = W - 40
         self.keyboard.resize_keyboard(kb_w, kb_h)
@@ -255,6 +264,8 @@ class WordTrainer(QWidget):
         self.word_label.setFont(QFont("Segoe Script", max(18, int(40 * scale))))
         self.input.setFont(QFont("Segoe Script", max(14, int(22 * scale))))
         self.error_label.setFont(QFont("Segoe Script", max(12, int(18 * scale))))
+        self.error_msg.setFont(QFont("Segoe Script", max(14, int(16 * scale)), QFont.Weight.Bold))
+
         self.help_btn.setFont(QFont("Segoe Script", max(10, int(14 * scale))))
         self.exit_btn.setFont(QFont("Segoe Script", max(10, int(14 * scale))))
 
